@@ -1,63 +1,69 @@
+import os
 import discord
 from discord.ext import commands
 from gtts import gTTS
-import os
+import asyncio
 
-# 🔐 INTENTS
-intents = discord.Intents.default()
-intents.message_content = True
+# ========= CONFIGURACIÓN =========
+PREFIX = "!"
+INTENTS = discord.Intents.default()
+INTENTS.message_content = True
+INTENTS.voice_states = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix=PREFIX, intents=INTENTS)
 
-# 🔴 CAMBIA ESTOS IDS POR LOS TUYOS
-CANAL_TEXTO_ID = 1455471945922641963
-CANAL_VOZ_ID = 1456545015659495425
-
-
+# ========= EVENTOS =========
 @bot.event
 async def on_ready():
     print(f"✅ Bot conectado como {bot.user}")
 
-
-@bot.event
-async def on_message(message):
-    if message.author.bot:
+# ========= COMANDO TTS =========
+@bot.command(name="tts")
+async def tts(ctx, *, texto: str):
+    # Verificar que el usuario esté en un canal de voz
+    if not ctx.author.voice:
+        await ctx.send("❌ Debes estar en un canal de voz.")
         return
 
-    if message.channel.id != CANAL_TEXTO_ID:
-        return
+    canal_voz = ctx.author.voice.channel
 
-    texto = message.content.strip()
-    if not texto:
-        return
-
-    # 🎙️ Crear audio TTS en español
-    tts = gTTS(text=texto, lang="es")
-    archivo = "tts.mp3"
-    tts.save(archivo)
-
-    canal_voz = bot.get_channel(CANAL_VOZ_ID)
-    if not canal_voz:
-        return
-
-    # 🔊 Conectar a voz
-    if not message.guild.voice_client:
+    # Conectarse al canal de voz
+    if ctx.voice_client is None:
         vc = await canal_voz.connect()
     else:
-        vc = message.guild.voice_client
+        vc = ctx.voice_client
 
+    # Crear audio TTS
+    archivo = "tts.mp3"
+    tts = gTTS(text=texto, lang="es")
+    tts.save(archivo)
+
+    # Esperar si ya está reproduciendo algo
+    while vc.is_playing():
+        await asyncio.sleep(0.5)
+
+    # Reproducir audio (FFmpeg EXPLÍCITO)
     vc.play(
-        discord.FFmpegPCMAudio(archivo),
-        after=lambda e: os.remove(archivo)
+        discord.FFmpegPCMAudio(
+            archivo,
+            executable="ffmpeg",
+            options="-loglevel panic"
+        )
     )
 
-    await bot.process_commands(message)
+    # Esperar a que termine
+    while vc.is_playing():
+        await asyncio.sleep(0.5)
 
+    # Limpiar archivo
+    try:
+        os.remove(archivo)
+    except:
+        pass
 
-# 🔐 ARRANQUE SEGURO
-token = os.getenv("DISCORD_TOKEN")
-
-if not token:
+# ========= INICIO =========
+TOKEN = os.getenv("DISCORD_TOKEN")
+if not TOKEN:
     raise RuntimeError("ERROR: DISCORD_TOKEN no está definido en Railway")
 
-bot.run(token)
+bot.run(TOKEN)

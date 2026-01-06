@@ -3,17 +3,21 @@ from discord.ext import commands
 from gtts import gTTS
 import os
 
+# 🔐 INTENTS
 intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# 🔴 CAMBIA ESTOS IDS POR LOS TUYOS
 CANAL_TEXTO_ID = 1455471945922641963
 CANAL_VOZ_ID = 1456545015659495425
+
 
 @bot.event
 async def on_ready():
     print(f"✅ Bot conectado como {bot.user}")
+
 
 @bot.event
 async def on_message(message):
@@ -27,6 +31,7 @@ async def on_message(message):
     if not texto:
         return
 
+    # 🎙️ Crear audio TTS en español
     tts = gTTS(text=texto, lang="es")
     archivo = "tts.mp3"
     tts.save(archivo)
@@ -35,6 +40,7 @@ async def on_message(message):
     if not canal_voz:
         return
 
+    # 🔊 Conectar a voz
     if not message.guild.voice_client:
         vc = await canal_voz.connect()
     else:
@@ -45,4 +51,13 @@ async def on_message(message):
         after=lambda e: os.remove(archivo)
     )
 
-bot.run(os.getenv("DISCORD_TOKEN"))
+    await bot.process_commands(message)
+
+
+# 🔐 ARRANQUE SEGURO
+token = os.getenv("DISCORD_TOKEN")
+
+if not token:
+    raise RuntimeError("ERROR: DISCORD_TOKEN no está definido en Railway")
+
+bot.run(token)
